@@ -2,51 +2,70 @@ mod image_manager;
 mod pattern;
 mod wfc;
 
-use image_manager::image_io;
-
 use std::path::{ Path, PathBuf };
 
-use crate::{pattern::pattern_extractor::PatternExtractor, wfc::rules::AdjacencyRules};
+use crate::{ image_manager::image_io, wfc::{ model::WfcModel, solver::WfcSolver } };
+
+const PATTERN_SIZE: u32 = 4;
+
+const OUTPUT_WAVE_WIDTH: usize = 300;
+const OUTPUT_WAVE_HEIGHT: usize = 300;
 
 fn build_input_path() -> PathBuf {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    Path::new(manifest_dir).join("assets/input.png")
+    Path::new(manifest_dir).join("assets/Skyline 2.png")
 }
 
 fn build_output_path() -> PathBuf {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    Path::new(manifest_dir).join("assets/patterns")
+    Path::new(manifest_dir).join("assets/output.png")
 }
 
 fn main() {
     let input_path = build_input_path();
-    let output_path = build_output_path();
-
     let image = image_io::load_image(&input_path).unwrap();
-    let extractor = PatternExtractor::new(2);
-    let patterns = extractor.extract_unique_patterns(&image);
-    println!("Unique patterns: {}", patterns.len());
-    let total_frequency: u32 = patterns
-        .iter()
-        .map(|pattern| pattern.get_frequency())
-        .sum();
+    let model = WfcModel::from_image(&image, PATTERN_SIZE);
 
-    println!("Total frequency: {}", total_frequency);
-    let mut rules = AdjacencyRules::new(patterns.len());
-    rules.compute_rules(&patterns);
-    println!("Total adjacency rules: {}", rules.count_rules());
+    println!("Pattern size: {}", model.get_pattern_size());
+    println!("Unique patterns: {}", model.pattern_count());
+    println!("Total frequency: {}", model.total_frequency());
+    println!("Total adjacency rules: {}", model.get_rules().count_rules());
     println!("Validating adjacency rules...");
-    if rules.validate_rules_symmetry() {
+
+    if model.get_rules().validate_rules_symmetry() {
         println!("Adjacency rules are symmetric.");
     } else {
         println!("Adjacency rules are NOT symmetric.");
+        return;
     }
-    // save_extracted_patterns_individually(&patterns, &output_path);
-}
 
-fn save_extracted_patterns_individually(patterns: &[pattern::Pattern], output_dir: &Path) {
-    for pattern in patterns {
-        let pattern_output_path = output_dir.join(format!("pattern_{}.png", pattern.id));
-        pattern.save_to_image(&pattern_output_path);
+    let mut solver = WfcSolver::new(OUTPUT_WAVE_WIDTH, OUTPUT_WAVE_HEIGHT, &model);
+    let mut rng = rand::rng();
+
+    println!("Solving wave...");
+
+    let success = solver.solve(&model, &mut rng);
+
+    println!("Solve success: {}", success);
+    println!("Wave fully collapsed: {}", solver.get_wave().is_fully_collapsed());
+    println!("Wave has contradiction: {}", solver.get_wave().has_contradiction());
+
+    println!(
+        "Wave constraints valid: {}",
+        solver.get_wave().validate_constraints(model.get_rules())
+    );
+
+    if !success {
+        println!("Generation failed because of a contradiction.");
+        return;
     }
+
+    let Some(output) = wfc::renderer::render_wave(solver.get_wave(), model.get_patterns()) else {
+        println!("Cannot render an unresolved wave.");
+        return;
+    };
+
+    let output_path = build_output_path();
+    image_io::save_image(&output, &output_path).unwrap();
+    println!("Output saved to: {:?}", output_path);
 }
