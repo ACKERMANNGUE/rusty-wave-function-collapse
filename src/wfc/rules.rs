@@ -62,22 +62,4 @@ impl AdjacencyRules {
             })
             .sum()
     }
-
-    pub fn validate_rules_symmetry(&self) -> bool {
-        for (pattern_id, directions) in self.allowed.iter().enumerate() {
-            for (dir_index, allowed_patterns) in directions.iter().enumerate() {
-                let direction = ALL_DIRECTIONS[dir_index];
-                let opposite_direction = direction.opposite();
-                let opposite_dir_index = opposite_direction.to_index();
-
-                for &allowed_pattern_id in allowed_patterns {
-                    let opposite_allowed_patterns = &self.allowed[allowed_pattern_id][opposite_dir_index];
-                    if !opposite_allowed_patterns.contains(&(pattern_id as PatternId)) {
-                        return false;
-                    }
-                }
-            }
-        }
-        true
-    }
 }

@@ -55,7 +55,17 @@ impl Cell {
     }
 
     pub fn entropy(&self) -> f64 {
-        self.possible_count() as f64 // this is a placeholder before shannon entropy calculation is implemented
+        // Shannon entropy formula: H = -sum(p * log2(p))
+        let possible_count = self.possible_patterns
+            .iter()
+            .filter(|&&possible| possible)
+            .count();
+
+        if possible_count == 0 {
+            return f64::INFINITY;
+        }
+
+        (possible_count as f64).log2()
     }
 
     pub fn collapse_to(&mut self, pattern_id: PatternId) -> bool {

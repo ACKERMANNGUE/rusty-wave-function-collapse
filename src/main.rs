@@ -48,7 +48,6 @@ fn main() {
         println!("Parameters:");
         println!("Wave width: {}", solver.get_wave().get_width());
         println!("Wave height: {}", solver.get_wave().get_height());
-        println!("Pattern count: {}", model.pattern_count());
 
         let success = solver.solve(&model, &mut rng);
 
