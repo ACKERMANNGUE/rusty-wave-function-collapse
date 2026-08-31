@@ -5,6 +5,8 @@ pub type PatternId = usize;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{ Hash, Hasher };
 
+use crate::wfc::direction::Direction;
+
 pub struct Pattern {
     pub id: PatternId,
     pub size: u32,
@@ -86,5 +88,72 @@ impl Pattern {
 
     pub fn set_id(&mut self, new_id: PatternId) {
         self.id = new_id;
+    }
+
+    pub fn overlaps(&self, other: &Pattern, direction: Direction) -> bool {
+        if self.size != other.size {
+            println!(
+                "Patterns have different sizes: self.size = {}, other.size = {}",
+                self.size,
+                other.size
+            );
+            return false;
+        }
+
+        if self.size < 2 {
+            println!("Pattern size is too small for overlap check: size = {}", self.size);
+            return false;
+        }
+
+        let size = self.size as usize; // converts size to usize for indexing
+
+        match direction {
+            Direction::Right => {
+                for y in 0..size {
+                    for x in 0..size - 1 {
+                        let current_pixel = self.get_pixel(x + 1, y).unwrap();
+                        let other_pixel = other.get_pixel(x, y).unwrap();
+                        if current_pixel != other_pixel {
+                            return false;
+                        }
+                    }
+                }
+            }
+            Direction::Left => {
+                for y in 0..size {
+                    for x in 0..size - 1 {
+                        let current_pixel = self.get_pixel(x, y).unwrap();
+                        let other_pixel = other.get_pixel(x + 1, y).unwrap();
+                        if current_pixel != other_pixel {
+                            return false;
+                        }
+                    }
+                }
+            }
+            Direction::Down => {
+                for y in 0..size - 1 {
+                    for x in 0..size {
+                        let current_pixel = self.get_pixel(x, y + 1).unwrap();
+                        let other_pixel = other.get_pixel(x, y).unwrap();
+                        if current_pixel != other_pixel {
+                            return false;
+                        }
+                    }
+                }
+            }
+            Direction::Up => {
+                for y in 0..size - 1 {
+                    for x in 0..size {
+                        let current_pixel = self.get_pixel(x, y).unwrap();
+                        let other_pixel = other.get_pixel(x, y + 1).unwrap();
+                        if current_pixel != other_pixel {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+
+        true
     }
 }

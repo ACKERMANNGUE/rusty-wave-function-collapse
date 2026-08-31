@@ -1,11 +1,12 @@
 mod image_manager;
 mod pattern;
+mod wfc;
 
 use image_manager::image_io;
 
 use std::path::{ Path, PathBuf };
 
-use crate::pattern::pattern_extractor::PatternExtractor;
+use crate::{pattern::pattern_extractor::PatternExtractor, wfc::rules::AdjacencyRules};
 
 fn build_input_path() -> PathBuf {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
@@ -22,7 +23,7 @@ fn main() {
     let output_path = build_output_path();
 
     let image = image_io::load_image(&input_path).unwrap();
-    let extractor = PatternExtractor::new(10);
+    let extractor = PatternExtractor::new(2);
     let patterns = extractor.extract_unique_patterns(&image);
     println!("Unique patterns: {}", patterns.len());
     let total_frequency: u32 = patterns
@@ -31,7 +32,16 @@ fn main() {
         .sum();
 
     println!("Total frequency: {}", total_frequency);
-    save_extracted_patterns_individually(&patterns, &output_path);
+    let mut rules = AdjacencyRules::new(patterns.len());
+    rules.compute_rules(&patterns);
+    println!("Total adjacency rules: {}", rules.count_rules());
+    println!("Validating adjacency rules...");
+    if rules.validate_rules_symmetry() {
+        println!("Adjacency rules are symmetric.");
+    } else {
+        println!("Adjacency rules are NOT symmetric.");
+    }
+    // save_extracted_patterns_individually(&patterns, &output_path);
 }
 
 fn save_extracted_patterns_individually(patterns: &[pattern::Pattern], output_dir: &Path) {
