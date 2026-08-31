@@ -15,7 +15,8 @@ use crate::{
 pub struct WfcSolver {
     wave: Wave,
     propagation_queue: VecDeque<usize>,
-    queued: Vec<bool>,
+    queued_epoch: Vec<u32>,
+    current_epoch: u32,
     patterns_to_remove: Vec<PatternId>,
 }
 
@@ -26,8 +27,19 @@ impl WfcSolver {
         Self {
             wave: Wave::new(width, height, model.pattern_count()),
             propagation_queue: VecDeque::with_capacity(cell_count),
-            queued: vec![false; cell_count],
+            queued_epoch: vec![0; cell_count],
+            current_epoch: 0,
             patterns_to_remove: Vec::with_capacity(model.pattern_count()),
+        }
+    }
+
+    fn advance_epoch(&mut self) {
+        self.current_epoch = self.current_epoch.wrapping_add(1);
+        // reset the queued_epoch vector if it wraps around to 0
+        // zhis is a safeguard against potential overflow, ensuring that the epoch counter remains valid
+        if self.current_epoch == 0 {
+            self.queued_epoch.fill(0);
+            self.current_epoch = 1;
         }
     }
 
@@ -66,11 +78,24 @@ impl WfcSolver {
     pub fn propagate(&mut self, start_cell_index: usize, model: &WfcModel) -> bool {
         let rules = model.get_rules();
 
+        if start_cell_index >= self.queued_epoch.len() {
+            return false;
+        }
+
+        // reset the propagation queue and patterns_to_remove vector to prepare for the propagation process
+        self.propagation_queue.clear();
+        self.patterns_to_remove.clear();
+
+        self.advance_epoch();
+
+        let epoch = self.current_epoch;
+
         self.propagation_queue.push_back(start_cell_index);
-        self.queued[start_cell_index] = true;
+        self.queued_epoch[start_cell_index] = epoch;
 
         while let Some(current_index) = self.propagation_queue.pop_front() {
-            self.queued[current_index] = false;
+            // the cell is no longer queued and may be queued again later during this propagation
+            self.queued_epoch[current_index] = 0;
 
             let Some((x, y)) = self.wave.index_to_coordinates(current_index) else {
                 continue;
@@ -83,13 +108,17 @@ impl WfcSolver {
 
                 self.patterns_to_remove.clear();
 
-                // READ PHASE: borrow the current cell and neighbor cell immutably to check for supported patterns
+
+                // READ PHASE: Determine which patterns to remove from the neighbor cell
                 {
-                    let Some(current_cell) = self.wave.get_cell_by_index(current_index) else {
+                    let wave = &self.wave;
+                    let patterns_to_remove = &mut self.patterns_to_remove;
+
+                    let Some(current_cell) = wave.get_cell_by_index(current_index) else {
                         continue;
                     };
 
-                    let Some(neighbor_cell) = self.wave.get_cell_by_index(neighbor_index) else {
+                    let Some(neighbor_cell) = wave.get_cell_by_index(neighbor_index) else {
                         continue;
                     };
 
@@ -103,7 +132,7 @@ impl WfcSolver {
                             });
 
                         if !is_supported {
-                            self.patterns_to_remove.push(neighbor_pattern_id);
+                            patterns_to_remove.push(neighbor_pattern_id);
                         }
                     }
                 }
@@ -112,7 +141,7 @@ impl WfcSolver {
                     continue;
                 }
 
-                // WRITE PHASE: borrow the neighbor cell mutably to remove unsupported patterns
+                // WRITE PHASE: Remove the patterns from the neighbor cell and check for contradictions
                 for &pattern_id in &self.patterns_to_remove {
                     match self.wave.remove_pattern_from_cell(neighbor_index, pattern_id) {
                         PatternRemovalResult::Contradiction => {
@@ -123,16 +152,18 @@ impl WfcSolver {
                     }
                 }
 
-                if !self.queued[neighbor_index] {
+                // Add the neighbor cell to the queue if it hasn't been queued in this epoch
+                if self.queued_epoch[neighbor_index] != epoch {
                     self.propagation_queue.push_back(neighbor_index);
-                    self.queued[neighbor_index] = true;
+
+                    self.queued_epoch[neighbor_index] = epoch;
                 }
             }
         }
 
         true
     }
-
+    
     pub fn solve<R: Rng + ?Sized>(&mut self, model: &WfcModel, rng: &mut R) -> bool {
         while !self.wave.is_fully_collapsed() {
             if self.wave.has_contradiction() {
