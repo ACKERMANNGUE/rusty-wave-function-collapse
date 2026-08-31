@@ -52,6 +52,7 @@ impl WfcSolver {
 
     pub fn propagate(&mut self, start_cell_index: usize, model: &WfcModel) -> bool {
         let rules = model.get_rules();
+
         let cell_count = self.wave.get_width() * self.wave.get_height();
 
         if start_cell_index >= cell_count {
@@ -61,21 +62,16 @@ impl WfcSolver {
         let mut queue = VecDeque::new();
         let mut queued = vec![false; cell_count];
 
+        let mut patterns_to_remove: Vec<PatternId> = Vec::new();
+
         queue.push_back(start_cell_index);
         queued[start_cell_index] = true;
 
         while let Some(current_index) = queue.pop_front() {
-            queued[current_index] = false; // mrak the current cell as not queued because later it might be added again if its neighbors change
+            queued[current_index] = false;
+
             let Some((x, y)) = self.wave.index_to_coordinates(current_index) else {
                 continue;
-            };
-
-            let current_pattern_ids = {
-                let Some(current_cell) = self.wave.get_cell_by_index(current_index) else {
-                    continue;
-                };
-
-                current_cell.possible_pattern_ids()
             };
 
             for direction in ALL_DIRECTIONS {
@@ -83,34 +79,30 @@ impl WfcSolver {
                     continue;
                 };
 
-                let neighbor_pattern_ids = {
+                patterns_to_remove.clear();
+
+                // READ PHASE: borrow the current cell and neighbor cell immutably to check for supported patterns
+                {
+                    let Some(current_cell) = self.wave.get_cell_by_index(current_index) else {
+                        continue;
+                    };
+
                     let Some(neighbor_cell) = self.wave.get_cell_by_index(neighbor_index) else {
                         continue;
                     };
 
-                    neighbor_cell.possible_pattern_ids()
-                };
+                    for neighbor_pattern_id in neighbor_cell.possible_pattern_ids() {
+                        let is_supported = current_cell
+                            .possible_pattern_ids()
+                            .any(|current_pattern_id| {
+                                rules
+                                    .get_allowed_patterns(current_pattern_id, direction)
+                                    .contains(&neighbor_pattern_id)
+                            });
 
-                let mut patterns_to_remove: Vec<PatternId> = Vec::new();
-
-                for neighbor_pattern_id in neighbor_pattern_ids {
-                    let mut is_supported = false;
-
-                    for current_pattern_id in &current_pattern_ids {
-                        let allowed_patterns = rules.get_allowed_patterns(
-                            *current_pattern_id,
-                            direction
-                        );
-
-                        if allowed_patterns.contains(&neighbor_pattern_id) {
-                            is_supported = true;
-
-                            break;
+                        if !is_supported {
+                            patterns_to_remove.push(neighbor_pattern_id);
                         }
-                    }
-
-                    if !is_supported {
-                        patterns_to_remove.push(neighbor_pattern_id);
                     }
                 }
 
@@ -118,9 +110,11 @@ impl WfcSolver {
                     continue;
                 }
 
-                for pattern_id in patterns_to_remove {
+                // WRITE PHASE: borrow the neighbor cell mutably to remove unsupported patterns
+                for &pattern_id in &patterns_to_remove {
                     self.wave.remove_pattern_from_cell(neighbor_index, pattern_id);
                 }
+
                 let neighbor_has_contradiction = self.wave
                     .get_cell_by_index(neighbor_index)
                     .map(|cell| { cell.is_contradiction() })
@@ -129,6 +123,7 @@ impl WfcSolver {
                 if neighbor_has_contradiction {
                     return false;
                 }
+
                 if !queued[neighbor_index] {
                     queue.push_back(neighbor_index);
                     queued[neighbor_index] = true;
@@ -163,15 +158,13 @@ pub fn choose_weighted_pattern<R: Rng + ?Sized>(
     patterns: &[Pattern],
     rng: &mut R
 ) -> Option<PatternId> {
-    let possible_pattern_ids = cell.possible_pattern_ids();
-
-    if possible_pattern_ids.is_empty() {
+    if cell.is_contradiction() {
         return None;
     }
 
-    let total_weight: u64 = possible_pattern_ids
-        .iter()
-        .map(|pattern_id| { patterns[*pattern_id].get_frequency() as u64 })
+    let total_weight: u64 = cell
+        .possible_pattern_ids()
+        .map(|pattern_id| { patterns[pattern_id].get_frequency() as u64 })
         .sum();
 
     if total_weight == 0 {
@@ -180,7 +173,7 @@ pub fn choose_weighted_pattern<R: Rng + ?Sized>(
 
     let mut random_weight = rng.random_range(0..total_weight);
 
-    for pattern_id in possible_pattern_ids {
+    for pattern_id in cell.possible_pattern_ids() {
         let weight = patterns[pattern_id].get_frequency() as u64;
 
         if random_weight < weight {

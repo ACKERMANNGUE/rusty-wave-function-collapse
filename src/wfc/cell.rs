@@ -41,14 +41,16 @@ impl Cell {
         true
     }
 
-    pub fn possible_pattern_ids(&self) -> Vec<PatternId> {
+    // thanks ChatGPT for helping me write this function 
+    // this function returns an iterator over the possible pattern IDs for the cell instead of collect which creates a new vector
+    // this is more efficient as it avoids unnecessary allocations and copying of data
+    pub fn possible_pattern_ids(&self) -> impl Iterator<Item = PatternId> + '_ {
         self.possible_patterns
             .iter()
             .enumerate()
             .filter_map(|(pattern_id, &possible)| {
                 if possible { Some(pattern_id) } else { None }
             })
-            .collect()
     }
 
     pub fn entropy(&self) -> f64 {
