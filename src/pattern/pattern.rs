@@ -1,5 +1,3 @@
-use std::path::Path;
-
 pub type PatternId = usize;
 
 use std::collections::hash_map::DefaultHasher;
@@ -46,24 +44,6 @@ impl Pattern {
         self.frequency
     }
 
-    pub fn get_pixels(&self) -> &[[u8; 4]] {
-        &self.pixels
-    }
-
-    pub fn save_to_image(&self, path: &Path) {
-        let mut image = image::RgbaImage::new(self.size, self.size);
-
-        for y in 0..self.size {
-            for x in 0..self.size {
-                if let Some(pixel) = self.get_pixel(x as usize, y as usize) {
-                    image.put_pixel(x, y, image::Rgba(*pixel));
-                }
-            }
-        }
-
-        image.save(path).unwrap();
-    }
-
     pub fn get_pixel(&self, x: usize, y: usize) -> Option<&[u8; 4]> {
         if x >= (self.size as usize) || y >= (self.size as usize) {
             return None;
@@ -84,10 +64,6 @@ impl Pattern {
         self.pixels.hash(&mut hasher);
 
         hasher.finish()
-    }
-
-    pub fn set_id(&mut self, new_id: PatternId) {
-        self.id = new_id;
     }
 
     pub fn overlaps(&self, other: &Pattern, direction: Direction) -> bool {

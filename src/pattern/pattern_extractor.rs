@@ -36,30 +36,6 @@ impl PatternExtractor {
         Some(Pattern::new(id, self.pattern_size, pixels))
     }
 
-    pub fn extract_all_patterns(&self, image: &image::RgbaImage) -> Vec<Pattern> {
-        if image.width() < self.pattern_size || image.height() < self.pattern_size {
-            println!("Image is smaller than the pattern size. No patterns can be extracted.");
-            return Vec::new();
-        }
-
-        let mut patterns: Vec<Pattern> = Vec::new();
-        let mut id_counter: PatternId = 0;
-
-        let max_x = image.width() - self.pattern_size;
-        let max_y = image.height() - self.pattern_size;
-
-        for y in 0..=max_y {
-            for x in 0..=max_x {
-                if let Some(pattern) = self.extract_pattern(image, x, y, id_counter) {
-                    patterns.push(pattern);
-                    id_counter += 1;
-                }
-            }
-        }
-
-        patterns
-    }
-
     pub fn extract_unique_patterns(&self, image: &image::RgbaImage) -> Vec<Pattern> {
         if image.width() < self.pattern_size || image.height() < self.pattern_size {
             println!("Image is smaller than the pattern size. No patterns can be extracted.");
