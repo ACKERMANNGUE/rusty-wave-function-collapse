@@ -1,13 +1,15 @@
 use crate::pattern::PatternId;
 
 pub struct Cell {
-    pub possible_patterns: Vec<bool>,
+    possible_patterns: Vec<bool>,
+    possible_count: usize,
 }
 
 impl Cell {
     pub fn new(pattern_count: usize) -> Self {
         Self {
             possible_patterns: vec![true; pattern_count],
+            possible_count: pattern_count,
         }
     }
 
@@ -15,26 +17,12 @@ impl Cell {
         self.possible_patterns.get(pattern_id).copied().unwrap_or(false)
     }
 
-    pub fn possible_count(&self) -> usize {
-        self.possible_patterns
-            .iter()
-            .filter(|possible| **possible)
-            .count()
-    }
-
-    pub fn get_frequencies(&self) -> Vec<usize> {
-        self.possible_patterns
-            .iter()
-            .map(|&possible| if possible { 1 } else { 0 })
-            .collect()
-    }
-
     pub fn is_collapsed(&self) -> bool {
-        self.possible_count() == 1
+        self.possible_count == 1
     }
 
     pub fn is_contradiction(&self) -> bool {
-        self.possible_count() == 0
+        self.possible_count == 0
     }
 
     pub fn remove_pattern(&mut self, pattern_id: PatternId) -> bool {
@@ -47,6 +35,8 @@ impl Cell {
         }
 
         *possible = false;
+
+        self.possible_count -= 1;
 
         true
     }
@@ -61,30 +51,12 @@ impl Cell {
             .collect()
     }
 
-    pub fn entropy(&self, frequencies: &[usize]) -> f64 {
-        // Shannon entropy formula: H = -sum(p * log2(p))
-        let total_weight: usize = self.possible_patterns
-            .iter()
-            .enumerate()
-            .filter(|(_, possible)| **possible)
-            .map(|(index, _)| frequencies[index])
-            .sum();
+    pub fn entropy(&self) -> f64 {
+        self.possible_count as f64
+    }
 
-        if total_weight == 0 {
-            return f64::INFINITY;
-        }
-
-        let total_weight = total_weight as f64;
-
-        self.possible_patterns
-            .iter()
-            .enumerate()
-            .filter(|(_, possible)| **possible)
-            .map(|(index, _)| {
-                let probability = (frequencies[index] as f64) / total_weight;
-                -probability * probability.log2()
-            })
-            .sum()
+    pub fn possible_count(&self) -> usize {
+        self.possible_count
     }
 
     pub fn collapse_to(&mut self, pattern_id: PatternId) -> bool {
@@ -95,6 +67,9 @@ impl Cell {
         for (id, possible) in self.possible_patterns.iter_mut().enumerate() {
             *possible = id == pattern_id;
         }
+
+        self.possible_count = 1;
+
         true
     }
 

@@ -45,4 +45,5 @@ impl WfcModel {
             .map(|pattern| pattern.get_frequency())
             .sum()
     }
+
 }

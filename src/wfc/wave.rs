@@ -1,23 +1,32 @@
 use rand::{ Rng, RngExt };
 
-use crate::wfc::{ cell::Cell, direction::Direction, rules::{ALL_DIRECTIONS, AdjacencyRules} };
+use crate::{
+    pattern::PatternId,
+    wfc::{ cell::Cell, direction::Direction, rules::{ ALL_DIRECTIONS, AdjacencyRules } },
+};
 
 pub struct Wave {
     width: usize,
     height: usize,
     cells: Vec<Cell>,
+    unresolved_count: usize,
+    contradiction_count: usize,
 }
 
 impl Wave {
     pub fn new(width: usize, height: usize, pattern_count: usize) -> Self {
         let cell_count = width * height;
-
         let cells = (0..cell_count).map(|_| { Cell::new(pattern_count) }).collect();
+
+        let unresolved_count = if pattern_count > 1 { cell_count } else { 0 };
+        let contradiction_count = if pattern_count == 0 { cell_count } else { 0 };
 
         Self {
             width,
             height,
             cells,
+            unresolved_count,
+            contradiction_count,
         }
     }
 
@@ -43,7 +52,6 @@ impl Wave {
         }
 
         let x = index % self.width;
-
         let y = index / self.width;
 
         Some((x, y))
@@ -51,16 +59,11 @@ impl Wave {
 
     pub fn get_cell(&self, x: usize, y: usize) -> Option<&Cell> {
         let index = self.coordinates_to_index(x, y)?;
-
         self.cells.get(index)
     }
 
     pub fn get_cell_by_index(&self, index: usize) -> Option<&Cell> {
         self.cells.get(index)
-    }
-
-    pub fn get_cell_by_index_mut(&mut self, index: usize) -> Option<&mut Cell> {
-        self.cells.get_mut(index)
     }
 
     pub fn get_neighbor_index(&self, x: usize, y: usize, direction: Direction) -> Option<usize> {
@@ -110,7 +113,7 @@ impl Wave {
                 continue;
             }
 
-            let entropy = cell.entropy(&cell.get_frequencies());
+            let entropy = cell.entropy();
 
             if entropy < lowest_entropy {
                 lowest_entropy = entropy;
@@ -133,11 +136,11 @@ impl Wave {
     }
 
     pub fn is_fully_collapsed(&self) -> bool {
-        self.cells.iter().all(|cell| { cell.is_collapsed() })
+        self.unresolved_count == 0 && self.contradiction_count == 0
     }
 
     pub fn has_contradiction(&self) -> bool {
-        self.cells.iter().any(|cell| { cell.is_contradiction() })
+        self.contradiction_count > 0
     }
 
     pub fn validate_constraints(&self, rules: &AdjacencyRules) -> bool {
@@ -176,6 +179,70 @@ impl Wave {
                 }
             }
         }
+
+        true
+    }
+
+    fn update_cell_state_counts(&mut self, before_count: usize, after_count: usize) {
+        let was_unresolved = before_count > 1;
+        let is_unresolved = after_count > 1;
+
+        if was_unresolved && !is_unresolved {
+            self.unresolved_count -= 1;
+        } else if !was_unresolved && is_unresolved {
+            self.unresolved_count += 1;
+        }
+
+        let was_contradiction = before_count == 0;
+        let is_contradiction = after_count == 0;
+
+        if !was_contradiction && is_contradiction {
+            self.contradiction_count += 1;
+        } else if was_contradiction && !is_contradiction {
+            self.contradiction_count -= 1;
+        }
+    }
+
+    pub fn remove_pattern_from_cell(&mut self, cell_index: usize, pattern_id: PatternId) -> bool {
+        let (before_count, after_count) = {
+            let Some(cell) = self.cells.get_mut(cell_index) else {
+                return false;
+            };
+
+            let before_count = cell.possible_count();
+
+            if !cell.remove_pattern(pattern_id) {
+                return false;
+            }
+
+            let after_count = cell.possible_count();
+
+            (before_count, after_count)
+        };
+
+        self.update_cell_state_counts(before_count, after_count);
+
+        true
+    }
+
+    pub fn collapse_cell_to(&mut self, cell_index: usize, pattern_id: PatternId) -> bool {
+        let (before_count, after_count) = {
+            let Some(cell) = self.cells.get_mut(cell_index) else {
+                return false;
+            };
+
+            let before_count = cell.possible_count();
+
+            if !cell.collapse_to(pattern_id) {
+                return false;
+            }
+
+            let after_count = cell.possible_count();
+
+            (before_count, after_count)
+        };
+
+        self.update_cell_state_counts(before_count, after_count);
 
         true
     }

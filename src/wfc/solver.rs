@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use rand::{Rng, RngExt};
+use rand::{ Rng, RngExt };
 
 use crate::{
     pattern::{ Pattern, PatternId },
@@ -33,9 +33,7 @@ impl WfcSolver {
             choose_weighted_pattern(cell, model.get_patterns(), rng)?
         };
 
-        let cell = self.wave.get_cell_by_index_mut(cell_index)?;
-
-        if !cell.collapse_to(selected_pattern_id) {
+        if !self.wave.collapse_cell_to(cell_index, selected_pattern_id) {
             return None;
         }
 
@@ -110,18 +108,17 @@ impl WfcSolver {
                     continue;
                 }
 
-                let Some(neighbor_cell) = self.wave.get_cell_by_index_mut(neighbor_index) else {
-                    continue;
-                };
-
                 for pattern_id in patterns_to_remove {
-                    neighbor_cell.remove_pattern(pattern_id);
+                    self.wave.remove_pattern_from_cell(neighbor_index, pattern_id);
                 }
+                let neighbor_has_contradiction = self.wave
+                    .get_cell_by_index(neighbor_index)
+                    .map(|cell| { cell.is_contradiction() })
+                    .unwrap_or(false);
 
-                if neighbor_cell.is_contradiction() {
+                if neighbor_has_contradiction {
                     return false;
                 }
-
                 queue.push_back(neighbor_index);
             }
         }
