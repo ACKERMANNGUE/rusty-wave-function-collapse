@@ -63,13 +63,6 @@ impl AdjacencyRules {
             .sum()
     }
 
-    pub fn debug_pattern_rules(&self, pattern_id: PatternId) {
-        for direction in ALL_DIRECTIONS {
-            let allowed = self.get_allowed_patterns(pattern_id, direction);
-            println!("{:?}: {} allowed patterns", direction, allowed.len());
-        }
-    }
-
     pub fn validate_rules_symmetry(&self) -> bool {
         for (pattern_id, directions) in self.allowed.iter().enumerate() {
             for (dir_index, allowed_patterns) in directions.iter().enumerate() {
