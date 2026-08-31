@@ -52,10 +52,20 @@ impl WfcSolver {
 
     pub fn propagate(&mut self, start_cell_index: usize, model: &WfcModel) -> bool {
         let rules = model.get_rules();
+        let cell_count = self.wave.get_width() * self.wave.get_height();
+
+        if start_cell_index >= cell_count {
+            return false;
+        }
+
         let mut queue = VecDeque::new();
+        let mut queued = vec![false; cell_count];
+
         queue.push_back(start_cell_index);
+        queued[start_cell_index] = true;
 
         while let Some(current_index) = queue.pop_front() {
+            queued[current_index] = false; // mrak the current cell as not queued because later it might be added again if its neighbors change
             let Some((x, y)) = self.wave.index_to_coordinates(current_index) else {
                 continue;
             };
@@ -119,7 +129,10 @@ impl WfcSolver {
                 if neighbor_has_contradiction {
                     return false;
                 }
-                queue.push_back(neighbor_index);
+                if !queued[neighbor_index] {
+                    queue.push_back(neighbor_index);
+                    queued[neighbor_index] = true;
+                }
             }
         }
 
