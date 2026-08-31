@@ -261,4 +261,14 @@ impl Wave {
 
         true
     }
+
+    pub fn get_unresolved_count(&self) -> usize {
+        self.unresolved_count
+    }
+
+    pub fn get_contradiction_count(&self) -> usize {
+        self.contradiction_count
+    }
+
 }
+
