@@ -2,11 +2,10 @@ mod image_manager;
 mod pattern;
 
 use image_manager::image_io;
-use pattern::Pattern;
 
 use std::path::{ Path, PathBuf };
 
-const PATH_OUTPUT: &str = "assets/output.png";
+use crate::pattern::pattern_extractor::PatternExtractor;
 
 fn build_input_path() -> PathBuf {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
@@ -15,7 +14,7 @@ fn build_input_path() -> PathBuf {
 
 fn build_output_path() -> PathBuf {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    Path::new(manifest_dir).join(PATH_OUTPUT)
+    Path::new(manifest_dir).join("assets/patterns")
 }
 
 fn main() {
@@ -23,6 +22,21 @@ fn main() {
     let output_path = build_output_path();
 
     let image = image_io::load_image(&input_path).unwrap();
-    let pattern = Pattern::extract_pattern(&image, 0, 0, 32, 1).unwrap();
-    pattern.debug_save_extracted_pattern(&output_path);
+    let extractor = PatternExtractor::new(10);
+    let patterns = extractor.extract_unique_patterns(&image);
+    println!("Unique patterns: {}", patterns.len());
+    let total_frequency: u32 = patterns
+        .iter()
+        .map(|pattern| pattern.get_frequency())
+        .sum();
+
+    println!("Total frequency: {}", total_frequency);
+    save_extracted_patterns_individually(&patterns, &output_path);
+}
+
+fn save_extracted_patterns_individually(patterns: &[pattern::Pattern], output_dir: &Path) {
+    for pattern in patterns {
+        let pattern_output_path = output_dir.join(format!("pattern_{}.png", pattern.id));
+        pattern.save_to_image(&pattern_output_path);
+    }
 }
