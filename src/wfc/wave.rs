@@ -5,6 +5,13 @@ use crate::{
     wfc::{ cell::Cell, direction::Direction, rules::{ ALL_DIRECTIONS, AdjacencyRules } },
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PatternRemovalResult {
+    NotRemoved,
+    Removed,
+    Contradiction,
+}
+
 pub struct Wave {
     width: usize,
     height: usize,
@@ -203,16 +210,20 @@ impl Wave {
         }
     }
 
-    pub fn remove_pattern_from_cell(&mut self, cell_index: usize, pattern_id: PatternId) -> bool {
+    pub fn remove_pattern_from_cell(
+        &mut self,
+        cell_index: usize,
+        pattern_id: PatternId
+    ) -> PatternRemovalResult {
         let (before_count, after_count) = {
             let Some(cell) = self.cells.get_mut(cell_index) else {
-                return false;
+                return PatternRemovalResult::NotRemoved;
             };
 
             let before_count = cell.possible_count();
 
             if !cell.remove_pattern(pattern_id) {
-                return false;
+                return PatternRemovalResult::NotRemoved;
             }
 
             let after_count = cell.possible_count();
@@ -222,7 +233,11 @@ impl Wave {
 
         self.update_cell_state_counts(before_count, after_count);
 
-        true
+        if after_count == 0 {
+            PatternRemovalResult::Contradiction
+        } else {
+            PatternRemovalResult::Removed
+        }
     }
 
     pub fn collapse_cell_to(&mut self, cell_index: usize, pattern_id: PatternId) -> bool {

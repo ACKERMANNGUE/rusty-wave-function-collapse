@@ -4,17 +4,30 @@ use rand::{ Rng, RngExt };
 
 use crate::{
     pattern::{ Pattern, PatternId },
-    wfc::{ cell::Cell, model::WfcModel, rules::ALL_DIRECTIONS, wave::Wave },
+    wfc::{
+        cell::Cell,
+        model::WfcModel,
+        rules::ALL_DIRECTIONS,
+        wave::{ PatternRemovalResult, Wave },
+    },
 };
 
 pub struct WfcSolver {
     wave: Wave,
+    propagation_queue: VecDeque<usize>,
+    queued: Vec<bool>,
+    patterns_to_remove: Vec<PatternId>,
 }
 
 impl WfcSolver {
     pub fn new(width: usize, height: usize, model: &WfcModel) -> Self {
+        let cell_count = width * height;
+
         Self {
             wave: Wave::new(width, height, model.pattern_count()),
+            propagation_queue: VecDeque::with_capacity(cell_count),
+            queued: vec![false; cell_count],
+            patterns_to_remove: Vec::with_capacity(model.pattern_count()),
         }
     }
 
@@ -53,22 +66,11 @@ impl WfcSolver {
     pub fn propagate(&mut self, start_cell_index: usize, model: &WfcModel) -> bool {
         let rules = model.get_rules();
 
-        let cell_count = self.wave.get_width() * self.wave.get_height();
+        self.propagation_queue.push_back(start_cell_index);
+        self.queued[start_cell_index] = true;
 
-        if start_cell_index >= cell_count {
-            return false;
-        }
-
-        let mut queue = VecDeque::new();
-        let mut queued = vec![false; cell_count];
-
-        let mut patterns_to_remove: Vec<PatternId> = Vec::new();
-
-        queue.push_back(start_cell_index);
-        queued[start_cell_index] = true;
-
-        while let Some(current_index) = queue.pop_front() {
-            queued[current_index] = false;
+        while let Some(current_index) = self.propagation_queue.pop_front() {
+            self.queued[current_index] = false;
 
             let Some((x, y)) = self.wave.index_to_coordinates(current_index) else {
                 continue;
@@ -79,7 +81,7 @@ impl WfcSolver {
                     continue;
                 };
 
-                patterns_to_remove.clear();
+                self.patterns_to_remove.clear();
 
                 // READ PHASE: borrow the current cell and neighbor cell immutably to check for supported patterns
                 {
@@ -101,32 +103,29 @@ impl WfcSolver {
                             });
 
                         if !is_supported {
-                            patterns_to_remove.push(neighbor_pattern_id);
+                            self.patterns_to_remove.push(neighbor_pattern_id);
                         }
                     }
                 }
 
-                if patterns_to_remove.is_empty() {
+                if self.patterns_to_remove.is_empty() {
                     continue;
                 }
 
                 // WRITE PHASE: borrow the neighbor cell mutably to remove unsupported patterns
-                for &pattern_id in &patterns_to_remove {
-                    self.wave.remove_pattern_from_cell(neighbor_index, pattern_id);
+                for &pattern_id in &self.patterns_to_remove {
+                    match self.wave.remove_pattern_from_cell(neighbor_index, pattern_id) {
+                        PatternRemovalResult::Contradiction => {
+                            return false;
+                        }
+                        PatternRemovalResult::Removed => {}
+                        PatternRemovalResult::NotRemoved => {}
+                    }
                 }
 
-                let neighbor_has_contradiction = self.wave
-                    .get_cell_by_index(neighbor_index)
-                    .map(|cell| { cell.is_contradiction() })
-                    .unwrap_or(false);
-
-                if neighbor_has_contradiction {
-                    return false;
-                }
-
-                if !queued[neighbor_index] {
-                    queue.push_back(neighbor_index);
-                    queued[neighbor_index] = true;
+                if !self.queued[neighbor_index] {
+                    self.propagation_queue.push_back(neighbor_index);
+                    self.queued[neighbor_index] = true;
                 }
             }
         }
