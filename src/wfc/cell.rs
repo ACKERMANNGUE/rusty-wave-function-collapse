@@ -22,6 +22,13 @@ impl Cell {
             .count()
     }
 
+    pub fn get_frequencies(&self) -> Vec<usize> {
+        self.possible_patterns
+            .iter()
+            .map(|&possible| if possible { 1 } else { 0 })
+            .collect()
+    }
+
     pub fn is_collapsed(&self) -> bool {
         self.possible_count() == 1
     }

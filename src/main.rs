@@ -6,16 +6,16 @@ use std::path::{ Path, PathBuf };
 
 use crate::{ image_manager::image_io, wfc::{ model::WfcModel, solver::WfcSolver } };
 
-const PATTERN_SIZE: u32 = 4;
+const PATTERN_SIZE: u32 = 3;
 
-const OUTPUT_WAVE_WIDTH: usize = 300;
-const OUTPUT_WAVE_HEIGHT: usize = 300;
+const OUTPUT_WAVE_WIDTH: usize = 64;
+const OUTPUT_WAVE_HEIGHT: usize = 64;
 
 const MAX_ATTEMPTS: usize = 100;
 
 fn build_input_path() -> PathBuf {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    Path::new(manifest_dir).join("assets/input.png")
+    Path::new(manifest_dir).join("assets/Flowers.png")
 }
 
 fn build_output_path() -> PathBuf {

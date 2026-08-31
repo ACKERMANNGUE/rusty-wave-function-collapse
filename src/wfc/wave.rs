@@ -103,7 +103,6 @@ impl Wave {
 
     pub fn find_lowest_entropy_cell<R: Rng + ?Sized>(&self, rng: &mut R) -> Option<usize> {
         let mut lowest_entropy = f64::MAX;
-
         let mut candidates: Vec<usize> = Vec::new();
 
         for (index, cell) in self.cells.iter().enumerate() {
@@ -111,7 +110,7 @@ impl Wave {
                 continue;
             }
 
-            let entropy = cell.entropy();
+            let entropy = cell.entropy(&cell.get_frequencies());
 
             if entropy < lowest_entropy {
                 lowest_entropy = entropy;
