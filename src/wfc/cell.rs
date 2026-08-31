@@ -54,18 +54,30 @@ impl Cell {
             .collect()
     }
 
-    pub fn entropy(&self) -> f64 {
+    pub fn entropy(&self, frequencies: &[usize]) -> f64 {
         // Shannon entropy formula: H = -sum(p * log2(p))
-        let possible_count = self.possible_patterns
+        let total_weight: usize = self.possible_patterns
             .iter()
-            .filter(|&&possible| possible)
-            .count();
+            .enumerate()
+            .filter(|(_, possible)| **possible)
+            .map(|(index, _)| frequencies[index])
+            .sum();
 
-        if possible_count == 0 {
+        if total_weight == 0 {
             return f64::INFINITY;
         }
 
-        (possible_count as f64).log2()
+        let total_weight = total_weight as f64;
+
+        self.possible_patterns
+            .iter()
+            .enumerate()
+            .filter(|(_, possible)| **possible)
+            .map(|(index, _)| {
+                let probability = (frequencies[index] as f64) / total_weight;
+                -probability * probability.log2()
+            })
+            .sum()
     }
 
     pub fn collapse_to(&mut self, pattern_id: PatternId) -> bool {
