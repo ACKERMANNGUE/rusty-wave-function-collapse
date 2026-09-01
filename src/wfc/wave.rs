@@ -19,10 +19,17 @@ pub struct Wave {
 }
 
 impl Wave {
-    pub fn new(width: usize, height: usize, pattern_count: usize) -> Self {
+    pub fn new(
+        width: usize,
+        height: usize,
+        pattern_count: usize,
+        total_weight: u64,
+        total_weight_log_weight: f64
+    ) -> Self {
         let cell_count = width * height;
-        let cells = (0..cell_count).map(|_| { Cell::new(pattern_count) }).collect();
-
+        let cells = (0..cell_count)
+            .map(|_| { Cell::new(pattern_count, total_weight, total_weight_log_weight) })
+            .collect();
         let unresolved_count = if pattern_count > 1 { cell_count } else { 0 };
         let contradiction_count = if pattern_count == 0 { cell_count } else { 0 };
 
@@ -109,7 +116,6 @@ impl Wave {
         self.coordinates_to_index(neighbor_x, neighbor_y)
     }
 
-    
     pub fn is_fully_collapsed(&self) -> bool {
         self.unresolved_count == 0 && self.contradiction_count == 0
     }
@@ -181,7 +187,9 @@ impl Wave {
     pub fn remove_pattern_from_cell(
         &mut self,
         cell_index: usize,
-        pattern_id: PatternId
+        pattern_id: PatternId,
+        pattern_weight: u32,
+        pattern_weight_log_weight: f64
     ) -> PatternRemovalResult {
         let (before_count, after_count) = {
             let Some(cell) = self.cells.get_mut(cell_index) else {
@@ -190,7 +198,7 @@ impl Wave {
 
             let before_count = cell.possible_count();
 
-            if !cell.remove_pattern(pattern_id) {
+            if !cell.remove_pattern(pattern_id, pattern_weight, pattern_weight_log_weight) {
                 return PatternRemovalResult::Unchanged;
             }
 
@@ -208,7 +216,13 @@ impl Wave {
         }
     }
 
-    pub fn collapse_cell_to(&mut self, cell_index: usize, pattern_id: PatternId) -> bool {
+    pub fn collapse_cell_to(
+        &mut self,
+        cell_index: usize,
+        pattern_id: PatternId,
+        selected_weight: u32,
+        selected_weight_log_weight: f64
+    ) -> bool {
         let (before_count, after_count) = {
             let Some(cell) = self.cells.get_mut(cell_index) else {
                 return false;
@@ -216,7 +230,7 @@ impl Wave {
 
             let before_count = cell.possible_count();
 
-            if !cell.collapse_to(pattern_id) {
+            if !cell.collapse_to(pattern_id, selected_weight, selected_weight_log_weight) {
                 return false;
             }
 

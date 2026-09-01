@@ -25,7 +25,7 @@ use crate::{
     pattern::{ Pattern, PatternId },
     wfc::{
         cell::Cell,
-        entropy_buckets::EntropyBuckets,
+        entropy_heap::EntropyHeap,
         model::WfcModel,
         rules::ALL_DIRECTIONS,
         wave::{ PatternRemovalResult, Wave },
@@ -38,7 +38,9 @@ pub struct WfcSolver {
     queued_cells: Vec<bool>,
     pending_removals: Vec<Vec<PatternId>>,
     removed_patterns_buffer: Vec<PatternId>,
-    entropy_buckets: EntropyBuckets,
+    entropy_heap: EntropyHeap,
+    entropy_dirty: Vec<bool>,
+    dirty_entropy_cells: Vec<usize>,
     timings: SolverTimings,
     propagation_stats: PropagationStats,
     affected_marks: [Vec<u32>; 4],
@@ -47,23 +49,62 @@ pub struct WfcSolver {
 }
 
 impl WfcSolver {
-    pub fn new(width: usize, height: usize, model: &WfcModel) -> Self {
+    pub fn new<R: Rng + ?Sized>(
+        width: usize,
+        height: usize,
+        model: &WfcModel,
+        rng: &mut R
+    ) -> Self {
         let cell_count = width * height;
         let pattern_count = model.pattern_count();
 
         Self {
-            wave: Wave::new(width, height, pattern_count),
+            wave: Wave::new(
+                width,
+                height,
+                pattern_count,
+                model.total_weight(),
+                model.total_weight_log_weight()
+            ),
+
             propagation_queue: VecDeque::with_capacity(cell_count),
             queued_cells: vec![false; cell_count],
             pending_removals: (0..cell_count).map(|_| Vec::new()).collect(),
             removed_patterns_buffer: Vec::with_capacity(pattern_count),
-            entropy_buckets: EntropyBuckets::new(pattern_count, cell_count),
+            entropy_heap: EntropyHeap::new(cell_count, pattern_count, model.initial_entropy(), rng),
+            entropy_dirty: vec![false; cell_count],
+            dirty_entropy_cells: Vec::with_capacity(cell_count),
             timings: SolverTimings::default(),
             propagation_stats: PropagationStats::default(),
             affected_marks: std::array::from_fn(|_| { vec![0u32; pattern_count] }),
             affected_patterns: std::array::from_fn(|_| { Vec::with_capacity(pattern_count) }),
             affected_epoch: 0,
         }
+    }
+
+    fn mark_entropy_dirty(&mut self, cell_index: usize) {
+        if self.entropy_dirty[cell_index] {
+            return;
+        }
+
+        self.entropy_dirty[cell_index] = true;
+        self.dirty_entropy_cells.push(cell_index);
+    }
+
+    fn flush_entropy_updates(&mut self) {
+        for index in 0..self.dirty_entropy_cells.len() {
+            let cell_index = self.dirty_entropy_cells[index];
+            self.entropy_dirty[cell_index] = false;
+            let Some((entropy, possible_count)) = self.wave
+                .get_cell_by_index(cell_index)
+                .map(|cell| { (cell.entropy(), cell.possible_count()) }) else {
+                continue;
+            };
+
+            self.entropy_heap.update(cell_index, entropy, possible_count);
+        }
+
+        self.dirty_entropy_cells.clear();
     }
 
     fn advance_affected_epoch(&mut self) {
@@ -103,7 +144,7 @@ impl WfcSolver {
     ) -> Option<PatternId> {
         let selected_pattern_id = {
             let cell = self.wave.get_cell_by_index(cell_index)?;
-            choose_weighted_pattern(cell, model.get_patterns(), rng)?
+            choose_weighted_pattern(cell, model.pattern_weights(), rng)?
         };
 
         self.removed_patterns_buffer.clear();
@@ -118,7 +159,14 @@ impl WfcSolver {
             );
         }
 
-        if !self.wave.collapse_cell_to(cell_index, selected_pattern_id) {
+        if
+            !self.wave.collapse_cell_to(
+                cell_index,
+                selected_pattern_id,
+                model.pattern_weight(selected_pattern_id),
+                model.pattern_weight_log_weight(selected_pattern_id)
+            )
+        {
             return None;
         }
 
@@ -135,13 +183,15 @@ impl WfcSolver {
         model: &WfcModel,
         rng: &mut R
     ) -> Option<(usize, PatternId)> {
-        let cell_index = self.find_lowest_entropy_cell(rng)?;
+        let cell_index = self.find_lowest_entropy_cell()?;
         let pattern_id = self.collapse_cell(cell_index, model, rng)?;
         Some((cell_index, pattern_id))
     }
 
     pub fn propagate(&mut self, model: &WfcModel) -> bool {
         let rules = model.get_rules();
+        let pattern_weights = model.pattern_weights();
+        let pattern_weight_log_weights = model.pattern_weight_log_weights();
 
         while let Some(current_index) = self.propagation_queue.pop_front() {
             self.queued_cells[current_index] = false;
@@ -244,20 +294,28 @@ impl WfcSolver {
                         continue;
                     }
 
-                    match self.wave.remove_pattern_from_cell(neighbor_index, neighbor_pattern_id) {
+                    match
+                        self.wave.remove_pattern_from_cell(
+                            neighbor_index,
+                            neighbor_pattern_id,
+                            pattern_weights[neighbor_pattern_id],
+                            pattern_weight_log_weights[neighbor_pattern_id]
+                        )
+                    {
                         PatternRemovalResult::Unchanged => {}
                         PatternRemovalResult::Contradiction => {
                             return false;
                         }
-                        PatternRemovalResult::Removed(possible_count) => {
+                        PatternRemovalResult::Removed(_) => { // (_) is done to avoid a warning about unused variable, might remove later if it becomes a problem
                             self.propagation_stats.removed_patterns += 1;
-                            self.entropy_buckets.update(neighbor_index, possible_count);
                             self.enqueue_pattern_removal(neighbor_index, neighbor_pattern_id);
+                            self.mark_entropy_dirty(neighbor_index);
                         }
                     }
                 }
             }
         }
+        self.flush_entropy_updates();
 
         true
     }
@@ -296,8 +354,8 @@ impl WfcSolver {
         true
     }
 
-    fn find_lowest_entropy_cell<R: Rng + ?Sized>(&mut self, rng: &mut R) -> Option<usize> {
-        self.entropy_buckets.pop_lowest(rng)
+    fn find_lowest_entropy_cell(&mut self) -> Option<usize> {
+        self.entropy_heap.pop_min()
     }
 
     pub fn get_propagation_stats(&self) -> PropagationStats {
@@ -307,17 +365,14 @@ impl WfcSolver {
 
 pub fn choose_weighted_pattern<R: Rng + ?Sized>(
     cell: &Cell,
-    patterns: &[Pattern],
+    pattern_weights: &[u32],
     rng: &mut R
 ) -> Option<PatternId> {
     if cell.is_contradiction() {
         return None;
     }
 
-    let total_weight: u64 = cell
-        .possible_pattern_ids()
-        .map(|pattern_id| { patterns[pattern_id].get_frequency() as u64 })
-        .sum();
+    let total_weight = cell.weight_sum();
 
     if total_weight == 0 {
         return None;
@@ -326,7 +381,7 @@ pub fn choose_weighted_pattern<R: Rng + ?Sized>(
     let mut random_weight = rng.random_range(0..total_weight);
 
     for pattern_id in cell.possible_pattern_ids() {
-        let weight = patterns[pattern_id].get_frequency() as u64;
+        let weight = pattern_weights[pattern_id] as u64;
 
         if random_weight < weight {
             return Some(pattern_id);

@@ -6,16 +6,12 @@ use std::{ path::{ Path, PathBuf }, time::{ Duration, Instant } };
 
 use crate::{ image_manager::image_io, wfc::{ model::WfcModel, solver::WfcSolver } };
 
-use rand::{
-    SeedableRng,
-    rngs::StdRng,
-};
-
+use rand::{ SeedableRng, rngs::StdRng };
 
 const PATTERN_SIZE: u32 = 3;
 
-const OUTPUT_WAVE_WIDTH: usize =    64 * 4;
-const OUTPUT_WAVE_HEIGHT: usize =   64 * 4;
+const OUTPUT_WAVE_WIDTH: usize = 64 * 5;
+const OUTPUT_WAVE_HEIGHT: usize = 64 * 5;
 
 const MAX_ATTEMPTS: usize = 100000;
 
@@ -82,7 +78,7 @@ fn main() {
         let attempt_start = Instant::now();
 
         let solver_creation_start = Instant::now();
-        let mut solver = WfcSolver::new(OUTPUT_WAVE_WIDTH, OUTPUT_WAVE_HEIGHT, &model);
+        let mut solver = WfcSolver::new(OUTPUT_WAVE_WIDTH, OUTPUT_WAVE_HEIGHT, &model, &mut rng);
         let solver_creation_duration = solver_creation_start.elapsed();
         total_solver_creation_duration += solver_creation_duration;
 
