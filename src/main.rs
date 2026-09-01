@@ -14,8 +14,8 @@ use rand::{
 
 const PATTERN_SIZE: u32 = 3;
 
-const OUTPUT_WAVE_WIDTH: usize =    64*10;
-const OUTPUT_WAVE_HEIGHT: usize =   64*10;
+const OUTPUT_WAVE_WIDTH: usize =    64 * 4;
+const OUTPUT_WAVE_HEIGHT: usize =   64 * 4;
 
 const MAX_ATTEMPTS: usize = 100000;
 
