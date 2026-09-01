@@ -6,10 +6,10 @@ use std::{ path::{ Path, PathBuf }, time::{ Duration, Instant } };
 
 use crate::{ image_manager::image_io, wfc::{ model::WfcModel, solver::WfcSolver } };
 
-const PATTERN_SIZE: u32 = 3;
+const PATTERN_SIZE: u32 = 2;
 
-const OUTPUT_WAVE_WIDTH: usize =    64 * 10;
-const OUTPUT_WAVE_HEIGHT: usize =   64 * 10;
+const OUTPUT_WAVE_WIDTH: usize = 64 * 2;
+const OUTPUT_WAVE_HEIGHT: usize = 64 * 2;
 
 const MAX_ATTEMPTS: usize = 100000;
 
@@ -94,6 +94,19 @@ fn main() {
         println!("{:<30} {}", "Has contradiction", solver.get_wave().has_contradiction());
         println!("{:<30} {}", "Unresolved cells", solver.get_wave().get_unresolved_count());
         println!("{:<30} {}", "Contradiction cells", solver.get_wave().get_contradiction_count());
+
+        let solver_timings = solver.get_timings();
+        println!("Observe total:     {:.3} ms", solver_timings.observe.as_secs_f64() * 1000.0);
+        println!("Propagate total:   {:.3} ms", solver_timings.propagate.as_secs_f64() * 1000.0);
+        println!("Observations:      {}", solver_timings.observations);
+        println!("Propagation calls: {}", solver_timings.propagation_calls);
+        let stats = solver.get_propagation_stats();
+        println!("Propagation stats:");
+        println!("  Queue pops:         {}", stats.queue_pops);
+        println!("  Neighbor checks:    {}", stats.neighbor_checks);
+        println!("  Collapsed current:  {}", stats.collapsed_current);
+        println!("  Collapsed neighbor: {}", stats.collapsed_neighbor);
+        println!("  Changed neighbors:  {}", stats.changed_neighbors);
 
         if !success {
             let attempt_duration = attempt_start.elapsed();

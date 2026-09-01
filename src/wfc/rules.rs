@@ -9,6 +9,7 @@ pub(crate) const ALL_DIRECTIONS: [Direction; 4] = [
 
 pub struct AdjacencyRules {
     pub allowed: Vec<[Vec<PatternId>; 4]>,
+    allowed_masks: Vec<[Vec<u64>; 4]>,
 }
 
 impl AdjacencyRules {
@@ -17,7 +18,12 @@ impl AdjacencyRules {
             .map(|_| { [Vec::new(), Vec::new(), Vec::new(), Vec::new()] })
             .collect();
 
-        Self { allowed }
+        let word_count = pattern_count.div_ceil(64);
+        let allowed_masks = (0..pattern_count)
+            .map(|_| { std::array::from_fn(|_| vec![0u64; word_count]) })
+            .collect();
+
+        Self { allowed, allowed_masks }
     }
 
     pub fn allow(
@@ -28,6 +34,10 @@ impl AdjacencyRules {
     ) {
         let dir_index = direction.to_index();
         self.allowed[pattern_id][dir_index].push(allowed_pattern_id);
+
+        let word_index = allowed_pattern_id / 64;
+        let bit_index = allowed_pattern_id % 64;
+        self.allowed_masks[pattern_id][dir_index][word_index] |= 1u64 << bit_index;
     }
 
     pub fn get_allowed_patterns(
@@ -37,6 +47,15 @@ impl AdjacencyRules {
     ) -> &[PatternId] {
         let dir_index = direction.to_index();
         &self.allowed[pattern_id][dir_index]
+    }
+
+    pub fn get_allowed_mask(
+        &self,
+        pattern_id: PatternId,
+        direction: Direction
+    ) -> &[u64] {
+        let dir_index = direction.to_index();
+        &self.allowed_masks[pattern_id][dir_index]
     }
 
     pub fn compute_rules(&mut self, patterns: &[Pattern]) {
@@ -63,3 +82,5 @@ impl AdjacencyRules {
             .sum()
     }
 }
+
+

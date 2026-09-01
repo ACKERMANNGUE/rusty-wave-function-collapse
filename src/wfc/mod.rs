@@ -6,3 +6,4 @@ pub mod solver;
 pub mod wave;
 pub mod renderer;
 pub mod bitset;
+pub mod entropy_buckets;

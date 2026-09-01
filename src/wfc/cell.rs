@@ -1,20 +1,20 @@
-use crate::pattern::PatternId;
+use crate::{ pattern::PatternId, wfc::bitset::BitSet };
 
 pub struct Cell {
-    possible_patterns: Vec<bool>,
+    possible_patterns: BitSet,
     possible_count: usize,
 }
 
 impl Cell {
     pub fn new(pattern_count: usize) -> Self {
         Self {
-            possible_patterns: vec![true; pattern_count],
+            possible_patterns: BitSet::full(pattern_count),
             possible_count: pattern_count,
         }
     }
 
     pub fn is_pattern_possible(&self, pattern_id: PatternId) -> bool {
-        self.possible_patterns.get(pattern_id).copied().unwrap_or(false)
+        self.possible_patterns.contains(pattern_id)
     }
 
     pub fn is_collapsed(&self) -> bool {
@@ -26,31 +26,16 @@ impl Cell {
     }
 
     pub fn remove_pattern(&mut self, pattern_id: PatternId) -> bool {
-        let Some(possible) = self.possible_patterns.get_mut(pattern_id) else {
-            return false;
-        };
-
-        if !*possible {
-            return false;
+        if self.possible_patterns.remove(pattern_id) {
+            self.possible_count -= 1;
+            true
+        } else {
+            false
         }
-
-        *possible = false;
-
-        self.possible_count -= 1;
-
-        true
     }
 
-    // thanks ChatGPT for helping me write this function 
-    // this function returns an iterator over the possible pattern IDs for the cell instead of collect which creates a new vector
-    // this is more efficient as it avoids unnecessary allocations and copying of data
     pub fn possible_pattern_ids(&self) -> impl Iterator<Item = PatternId> + '_ {
-        self.possible_patterns
-            .iter()
-            .enumerate()
-            .filter_map(|(pattern_id, &possible)| {
-                if possible { Some(pattern_id) } else { None }
-            })
+        self.possible_patterns.iter_ones()
     }
 
     pub fn entropy(&self) -> f64 {
@@ -66,10 +51,7 @@ impl Cell {
             return false;
         }
 
-        for (id, possible) in self.possible_patterns.iter_mut().enumerate() {
-            *possible = id == pattern_id;
-        }
-
+        self.possible_patterns.keep_only(pattern_id);
         self.possible_count = 1;
 
         true
@@ -80,6 +62,22 @@ impl Cell {
             return None;
         }
 
-        self.possible_patterns.iter().position(|possible| *possible)
+        self.possible_patterns.iter_ones().next()
+    }
+
+    pub fn possible_pattern_words(&self) -> &[u64] {
+        self.possible_patterns.words()
+    }
+
+    pub fn intersect_with_mask(&mut self, mask: &[u64]) -> bool {
+        let removed_count = self.possible_patterns.intersect_with(mask);
+
+        if removed_count == 0 {
+            return false;
+        }
+
+        self.possible_count -= removed_count;
+
+        true
     }
 }

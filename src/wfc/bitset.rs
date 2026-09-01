@@ -75,21 +75,22 @@ impl BitSet {
         was_set
     }
 
-    pub fn intersect_with(&mut self, other: &[u64]) -> bool {
+    pub fn intersect_with(&mut self, other: &[u64]) -> usize {
         assert_eq!(self.words.len(), other.len());
 
-        let mut changed = false;
+        let mut removed_count = 0;
 
         for (word, other_word) in self.words.iter_mut().zip(other.iter()) {
-            let new_word = *word & *other_word;
+            let old_word = *word;
+            let new_word = old_word & *other_word;
 
-            if new_word != *word {
+            if new_word != old_word {
+                removed_count += (old_word ^ new_word).count_ones() as usize;
                 *word = new_word;
-                changed = true;
             }
         }
 
-        changed
+        removed_count
     }
 
     pub fn words(&self) -> &[u64] {

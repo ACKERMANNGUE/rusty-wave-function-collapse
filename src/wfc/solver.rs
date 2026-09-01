@@ -1,4 +1,21 @@
-use std::collections::VecDeque;
+use std::{ collections::VecDeque, time::{ Duration, Instant } };
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SolverTimings {
+    pub observe: Duration,
+    pub propagate: Duration,
+    pub observations: usize,
+    pub propagation_calls: usize,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PropagationStats {
+    pub queue_pops: usize,
+    pub neighbor_checks: usize,
+    pub collapsed_current: usize,
+    pub collapsed_neighbor: usize,
+    pub changed_neighbors: usize,
+}
 
 use rand::{ Rng, RngExt };
 
@@ -6,9 +23,10 @@ use crate::{
     pattern::{ Pattern, PatternId },
     wfc::{
         cell::Cell,
+        entropy_buckets::EntropyBuckets,
         model::WfcModel,
         rules::ALL_DIRECTIONS,
-        wave::{ PatternRemovalResult, Wave },
+        wave::{ CellConstraintResult, Wave },
     },
 };
 
@@ -17,20 +35,31 @@ pub struct WfcSolver {
     propagation_queue: VecDeque<usize>,
     queued_epoch: Vec<u32>,
     current_epoch: u32,
-    patterns_to_remove: Vec<PatternId>,
+    supported_mask: Vec<u64>,
+    entropy_buckets: EntropyBuckets,
+    timings: SolverTimings,
+    propagation_stats: PropagationStats,
 }
 
 impl WfcSolver {
     pub fn new(width: usize, height: usize, model: &WfcModel) -> Self {
         let cell_count = width * height;
+        let word_count = model.pattern_count().div_ceil(64);
 
         Self {
             wave: Wave::new(width, height, model.pattern_count()),
             propagation_queue: VecDeque::with_capacity(cell_count),
             queued_epoch: vec![0; cell_count],
             current_epoch: 0,
-            patterns_to_remove: Vec::with_capacity(model.pattern_count()),
+            supported_mask: vec![0u64; word_count],
+            entropy_buckets: EntropyBuckets::new(model.pattern_count(), cell_count),
+            timings: SolverTimings::default(),
+            propagation_stats: PropagationStats::default(),
         }
+    }
+
+    pub fn get_timings(&self) -> SolverTimings {
+        self.timings
     }
 
     fn advance_epoch(&mut self) {
@@ -70,7 +99,7 @@ impl WfcSolver {
         model: &WfcModel,
         rng: &mut R
     ) -> Option<(usize, PatternId)> {
-        let cell_index = self.wave.find_lowest_entropy_cell(rng)?;
+        let cell_index = self.find_lowest_entropy_cell(rng)?;
         let pattern_id = self.collapse_cell(cell_index, model, rng)?;
         Some((cell_index, pattern_id))
     }
@@ -82,9 +111,7 @@ impl WfcSolver {
             return false;
         }
 
-        // reset the propagation queue and patterns_to_remove vector to prepare for the propagation process
         self.propagation_queue.clear();
-        self.patterns_to_remove.clear();
 
         self.advance_epoch();
 
@@ -94,8 +121,9 @@ impl WfcSolver {
         self.queued_epoch[start_cell_index] = epoch;
 
         while let Some(current_index) = self.propagation_queue.pop_front() {
-            // the cell is no longer queued and may be queued again later during this propagation
             self.queued_epoch[current_index] = 0;
+
+            self.propagation_stats.queue_pops += 1;
 
             let Some((x, y)) = self.wave.index_to_coordinates(current_index) else {
                 continue;
@@ -106,56 +134,70 @@ impl WfcSolver {
                     continue;
                 };
 
-                self.patterns_to_remove.clear();
+                self.propagation_stats.neighbor_checks += 1;
 
-
-                // READ PHASE: Determine which patterns to remove from the neighbor cell
+                if
+                    self.wave
+                        .get_cell_by_index(neighbor_index)
+                        .is_some_and(|cell| cell.is_collapsed())
                 {
-                    let wave = &self.wave;
-                    let patterns_to_remove = &mut self.patterns_to_remove;
+                    self.propagation_stats.collapsed_neighbor += 1;
+                }
 
-                    let Some(current_cell) = wave.get_cell_by_index(current_index) else {
+                let collapsed_pattern_id = {
+                    let Some(current_cell) = self.wave.get_cell_by_index(current_index) else {
                         continue;
                     };
 
-                    let Some(neighbor_cell) = wave.get_cell_by_index(neighbor_index) else {
+                    if current_cell.is_contradiction() {
+                        return false;
+                    }
+
+                    current_cell.collapsed_pattern_id()
+                };
+
+                let constraint_result = if let Some(pattern_id) = collapsed_pattern_id {
+                    self.propagation_stats.collapsed_current += 1;
+                    let allowed_mask = rules.get_allowed_mask(pattern_id, direction);
+                    self.wave.intersect_cell_with_mask(neighbor_index, allowed_mask)
+                } else {
+                    self.supported_mask.fill(0);
+
+                    {
+                        let Some(current_cell) = self.wave.get_cell_by_index(current_index) else {
+                            continue;
+                        };
+
+                        for current_pattern_id in current_cell.possible_pattern_ids() {
+                            for &allowed_pattern_id in rules.get_allowed_patterns(
+                                current_pattern_id,
+                                direction
+                            ) {
+                                let word_index = allowed_pattern_id / 64;
+                                let bit_index = allowed_pattern_id % 64;
+                                self.supported_mask[word_index] |= 1u64 << bit_index;
+                            }
+                        }
+                    }
+
+                    self.wave.intersect_cell_with_mask(neighbor_index, &self.supported_mask)
+                };
+
+                match constraint_result {
+                    CellConstraintResult::Unchanged => {
                         continue;
-                    };
-
-                    for neighbor_pattern_id in neighbor_cell.possible_pattern_ids() {
-                        let is_supported = current_cell
-                            .possible_pattern_ids()
-                            .any(|current_pattern_id| {
-                                rules
-                                    .get_allowed_patterns(current_pattern_id, direction)
-                                    .contains(&neighbor_pattern_id)
-                            });
-
-                        if !is_supported {
-                            patterns_to_remove.push(neighbor_pattern_id);
-                        }
+                    }
+                    CellConstraintResult::Contradiction => {
+                        return false;
+                    }
+                    CellConstraintResult::Changed(possible_count) => {
+                        self.propagation_stats.changed_neighbors += 1;
+                        self.entropy_buckets.push(neighbor_index, possible_count);
                     }
                 }
 
-                if self.patterns_to_remove.is_empty() {
-                    continue;
-                }
-
-                // WRITE PHASE: Remove the patterns from the neighbor cell and check for contradictions
-                for &pattern_id in &self.patterns_to_remove {
-                    match self.wave.remove_pattern_from_cell(neighbor_index, pattern_id) {
-                        PatternRemovalResult::Contradiction => {
-                            return false;
-                        }
-                        PatternRemovalResult::Removed => {}
-                        PatternRemovalResult::NotRemoved => {}
-                    }
-                }
-
-                // Add the neighbor cell to the queue if it hasn't been queued in this epoch
                 if self.queued_epoch[neighbor_index] != epoch {
                     self.propagation_queue.push_back(neighbor_index);
-
                     self.queued_epoch[neighbor_index] = epoch;
                 }
             }
@@ -163,23 +205,54 @@ impl WfcSolver {
 
         true
     }
-    
+
     pub fn solve<R: Rng + ?Sized>(&mut self, model: &WfcModel, rng: &mut R) -> bool {
+        self.timings = SolverTimings::default();
+        self.propagation_stats = PropagationStats::default();
+
         while !self.wave.is_fully_collapsed() {
             if self.wave.has_contradiction() {
                 return false;
             }
 
-            let Some((cell_index, _pattern_id)) = self.observe(model, rng) else {
+            let observe_start = Instant::now();
+
+            let observation = self.observe(model, rng);
+
+            self.timings.observe += observe_start.elapsed();
+            self.timings.observations += 1;
+
+            let Some((cell_index, _pattern_id)) = observation else {
                 return self.wave.is_fully_collapsed();
             };
 
-            if !self.propagate(cell_index, model) {
+            let propagate_start = Instant::now();
+
+            let propagation_success = self.propagate(cell_index, model);
+
+            self.timings.propagate += propagate_start.elapsed();
+            self.timings.propagation_calls += 1;
+
+            if !propagation_success {
                 return false;
             }
         }
 
         true
+    }
+
+    fn find_lowest_entropy_cell<R: Rng + ?Sized>(&mut self, rng: &mut R) -> Option<usize> {
+        let wave = &self.wave;
+
+        self.entropy_buckets.pop_lowest(rng, |cell_index| {
+            wave.get_cell_by_index(cell_index)
+                .map(|cell| cell.possible_count())
+                .unwrap_or(0)
+        })
+    }
+
+    pub fn get_propagation_stats(&self) -> PropagationStats {
+        self.propagation_stats
     }
 }
 
