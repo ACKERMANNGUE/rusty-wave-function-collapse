@@ -15,6 +15,8 @@ pub struct PropagationStats {
     pub collapsed_current: usize,
     pub collapsed_neighbor: usize,
     pub changed_neighbors: usize,
+    pub patterns_iterated: usize,
+    pub allowed_entries_processed: usize,
 }
 
 use rand::{ Rng, RngExt };
@@ -35,7 +37,7 @@ pub struct WfcSolver {
     propagation_queue: VecDeque<usize>,
     queued_epoch: Vec<u32>,
     current_epoch: u32,
-    supported_mask: Vec<u64>,
+    supported_masks: [Vec<u64>; 4],
     entropy_buckets: EntropyBuckets,
     timings: SolverTimings,
     propagation_stats: PropagationStats,
@@ -51,7 +53,12 @@ impl WfcSolver {
             propagation_queue: VecDeque::with_capacity(cell_count),
             queued_epoch: vec![0; cell_count],
             current_epoch: 0,
-            supported_mask: vec![0u64; word_count],
+            supported_masks: [
+                vec![0u64; word_count],
+                vec![0u64; word_count],
+                vec![0u64; word_count],
+                vec![0u64; word_count],
+            ],
             entropy_buckets: EntropyBuckets::new(model.pattern_count(), cell_count),
             timings: SolverTimings::default(),
             propagation_stats: PropagationStats::default(),
@@ -65,7 +72,7 @@ impl WfcSolver {
     fn advance_epoch(&mut self) {
         self.current_epoch = self.current_epoch.wrapping_add(1);
         // reset the queued_epoch vector if it wraps around to 0
-        // zhis is a safeguard against potential overflow, ensuring that the epoch counter remains valid
+        // this is a safeguard against potential overflow, ensuring that the epoch counter remains valid
         if self.current_epoch == 0 {
             self.queued_epoch.fill(0);
             self.current_epoch = 1;
@@ -112,7 +119,6 @@ impl WfcSolver {
         }
 
         self.propagation_queue.clear();
-
         self.advance_epoch();
 
         let epoch = self.current_epoch;
@@ -122,12 +128,56 @@ impl WfcSolver {
 
         while let Some(current_index) = self.propagation_queue.pop_front() {
             self.queued_epoch[current_index] = 0;
-
             self.propagation_stats.queue_pops += 1;
 
             let Some((x, y)) = self.wave.index_to_coordinates(current_index) else {
                 continue;
             };
+
+            let collapsed_pattern_id = {
+                let Some(current_cell) = self.wave.get_cell_by_index(current_index) else {
+                    continue;
+                };
+
+                if current_cell.is_contradiction() {
+                    return false;
+                }
+
+                current_cell.collapsed_pattern_id()
+            };
+
+            // build the supported-pattern masks only if the current cell is not collapsed
+            // it's done in a single iteration to avoid redundant computations and improve efficiency
+            if collapsed_pattern_id.is_none() {
+                for mask in &mut self.supported_masks {
+                    mask.fill(0);
+                }
+
+                let Some(current_cell) = self.wave.get_cell_by_index(current_index) else {
+                    continue;
+                };
+
+                for current_pattern_id in current_cell.possible_pattern_ids() {
+                    self.propagation_stats.patterns_iterated += 1;
+
+                    for direction in ALL_DIRECTIONS {
+                        let direction_index = direction.to_index();
+
+                        let allowed_patterns = rules.get_allowed_patterns(
+                            current_pattern_id,
+                            direction
+                        );
+
+                        self.propagation_stats.allowed_entries_processed += allowed_patterns.len();
+
+                        for &allowed_pattern_id in allowed_patterns {
+                            let word_index = allowed_pattern_id / 64;
+                            let bit_index = allowed_pattern_id % 64;
+                            self.supported_masks[direction_index][word_index] |= 1u64 << bit_index;
+                        }
+                    }
+                }
+            }
 
             for direction in ALL_DIRECTIONS {
                 let Some(neighbor_index) = self.wave.get_neighbor_index(x, y, direction) else {
@@ -144,43 +194,19 @@ impl WfcSolver {
                     self.propagation_stats.collapsed_neighbor += 1;
                 }
 
-                let collapsed_pattern_id = {
-                    let Some(current_cell) = self.wave.get_cell_by_index(current_index) else {
-                        continue;
-                    };
-
-                    if current_cell.is_contradiction() {
-                        return false;
-                    }
-
-                    current_cell.collapsed_pattern_id()
-                };
-
                 let constraint_result = if let Some(pattern_id) = collapsed_pattern_id {
+                    // Fast path, because it avoids the overhead of iterating through all possible patterns and computing the allowed patterns for each direction
                     self.propagation_stats.collapsed_current += 1;
                     let allowed_mask = rules.get_allowed_mask(pattern_id, direction);
                     self.wave.intersect_cell_with_mask(neighbor_index, allowed_mask)
                 } else {
-                    self.supported_mask.fill(0);
+                    // General path, because the current cell is not collapsed, so we need to compute the allowed patterns for each possible pattern in the current cell
+                    let direction_index = direction.to_index();
 
-                    {
-                        let Some(current_cell) = self.wave.get_cell_by_index(current_index) else {
-                            continue;
-                        };
-
-                        for current_pattern_id in current_cell.possible_pattern_ids() {
-                            for &allowed_pattern_id in rules.get_allowed_patterns(
-                                current_pattern_id,
-                                direction
-                            ) {
-                                let word_index = allowed_pattern_id / 64;
-                                let bit_index = allowed_pattern_id % 64;
-                                self.supported_mask[word_index] |= 1u64 << bit_index;
-                            }
-                        }
-                    }
-
-                    self.wave.intersect_cell_with_mask(neighbor_index, &self.supported_mask)
+                    self.wave.intersect_cell_with_mask(
+                        neighbor_index,
+                        &self.supported_masks[direction_index]
+                    )
                 };
 
                 match constraint_result {

@@ -6,22 +6,20 @@ use std::{ path::{ Path, PathBuf }, time::{ Duration, Instant } };
 
 use crate::{ image_manager::image_io, wfc::{ model::WfcModel, solver::WfcSolver } };
 
-const PATTERN_SIZE: u32 = 2;
+const PATTERN_SIZE: u32 = 3;
 
-const OUTPUT_WAVE_WIDTH: usize = 64 * 2;
-const OUTPUT_WAVE_HEIGHT: usize = 64 * 2;
+const OUTPUT_WAVE_WIDTH: usize = 64;
+const OUTPUT_WAVE_HEIGHT: usize = 64;
 
 const MAX_ATTEMPTS: usize = 100000;
 
 fn build_input_path() -> PathBuf {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
-
     Path::new(manifest_dir).join("assets/input.png")
 }
 
 fn build_output_path() -> PathBuf {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
-
     Path::new(manifest_dir).join("assets/output.png")
 }
 
@@ -102,11 +100,13 @@ fn main() {
         println!("Propagation calls: {}", solver_timings.propagation_calls);
         let stats = solver.get_propagation_stats();
         println!("Propagation stats:");
-        println!("  Queue pops:         {}", stats.queue_pops);
-        println!("  Neighbor checks:    {}", stats.neighbor_checks);
-        println!("  Collapsed current:  {}", stats.collapsed_current);
-        println!("  Collapsed neighbor: {}", stats.collapsed_neighbor);
-        println!("  Changed neighbors:  {}", stats.changed_neighbors);
+        println!("  Queue pops:                 {}", stats.queue_pops);
+        println!("  Neighbor checks:            {}", stats.neighbor_checks);
+        println!("  Collapsed current:          {}", stats.collapsed_current);
+        println!("  Collapsed neighbor:         {}", stats.collapsed_neighbor);
+        println!("  Changed neighbors:          {}", stats.changed_neighbors);
+        println!("  Patterns iterated:          {}", stats.patterns_iterated);
+        println!("  Allowed entries processed:  {}", stats.allowed_entries_processed);
 
         if !success {
             let attempt_duration = attempt_start.elapsed();
