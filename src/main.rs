@@ -8,16 +8,18 @@ use crate::{ image_manager::image_io, wfc::{ model::WfcModel, solver::WfcSolver 
 
 use rand::{ SeedableRng, rngs::StdRng };
 
-const PATTERN_SIZE: u32 = 3;
+const PATTERN_SIZE: u32 = 5;
 
 const OUTPUT_WAVE_WIDTH: usize = 64 * 5;
 const OUTPUT_WAVE_HEIGHT: usize = 64 * 5;
 
 const MAX_ATTEMPTS: usize = 100000;
 
+const SEED: u64 = 1203;
+
 fn build_input_path() -> PathBuf {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    Path::new(manifest_dir).join("assets/Dungeon.png")
+    Path::new(manifest_dir).join("assets/input.png")
 }
 
 fn build_output_path() -> PathBuf {
@@ -65,7 +67,7 @@ fn main() {
     println!("  Cells: {}", OUTPUT_WAVE_WIDTH * OUTPUT_WAVE_HEIGHT);
     println!("  Max attempts: {}", MAX_ATTEMPTS);
 
-    let mut rng = StdRng::seed_from_u64(29);
+    let mut rng = StdRng::seed_from_u64(SEED);
 
     let generation_start = Instant::now();
 

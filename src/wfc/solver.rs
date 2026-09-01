@@ -22,7 +22,7 @@ pub struct PropagationStats {
 use rand::{ Rng, RngExt };
 
 use crate::{
-    pattern::{ Pattern, PatternId },
+    pattern::{ PatternId },
     wfc::{
         cell::Cell,
         entropy_heap::EntropyHeap,
