@@ -1,5 +1,3 @@
-use rand::{ Rng, RngExt };
-
 use crate::{
     pattern::PatternId,
     wfc::{ cell::Cell, direction::Direction, rules::{ ALL_DIRECTIONS, AdjacencyRules } },
@@ -111,37 +109,7 @@ impl Wave {
         self.coordinates_to_index(neighbor_x, neighbor_y)
     }
 
-    pub fn find_lowest_entropy_cell<R: Rng + ?Sized>(&self, rng: &mut R) -> Option<usize> {
-        let mut lowest_entropy = f64::MAX;
-        let mut candidates: Vec<usize> = Vec::new();
-
-        for (index, cell) in self.cells.iter().enumerate() {
-            if cell.is_collapsed() || cell.is_contradiction() {
-                continue;
-            }
-
-            let entropy = cell.entropy();
-
-            if entropy < lowest_entropy {
-                lowest_entropy = entropy;
-
-                candidates.clear();
-
-                candidates.push(index);
-            } else if entropy == lowest_entropy {
-                candidates.push(index);
-            }
-        }
-
-        if candidates.is_empty() {
-            return None;
-        }
-
-        let random_index = rng.random_range(0..candidates.len());
-
-        Some(candidates[random_index])
-    }
-
+    
     pub fn is_fully_collapsed(&self) -> bool {
         self.unresolved_count == 0 && self.contradiction_count == 0
     }

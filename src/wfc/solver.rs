@@ -246,7 +246,7 @@ impl WfcSolver {
                         }
                         PatternRemovalResult::Removed(possible_count) => {
                             self.propagation_stats.removed_patterns += 1;
-                            self.entropy_buckets.push(neighbor_index, possible_count);
+                            self.entropy_buckets.update(neighbor_index, possible_count);
                             self.enqueue_pattern_removal(neighbor_index, neighbor_pattern_id);
                         }
                     }
@@ -292,13 +292,7 @@ impl WfcSolver {
     }
 
     fn find_lowest_entropy_cell<R: Rng + ?Sized>(&mut self, rng: &mut R) -> Option<usize> {
-        let wave = &self.wave;
-
-        self.entropy_buckets.pop_lowest(rng, |cell_index| {
-            wave.get_cell_by_index(cell_index)
-                .map(|cell| cell.possible_count())
-                .unwrap_or(0)
-        })
+        self.entropy_buckets.pop_lowest(rng)
     }
 
     pub fn get_propagation_stats(&self) -> PropagationStats {
