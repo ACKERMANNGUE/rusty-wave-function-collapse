@@ -7,9 +7,15 @@ pub(crate) const ALL_DIRECTIONS: [Direction; 4] = [
     Direction::Left,
 ];
 
+#[derive(Debug, Clone, Copy)]
+pub struct PatternBit {
+    pub word_index: usize,
+    pub mask: u64,
+}
+
 pub struct AdjacencyRules {
     pub allowed: Vec<[Vec<PatternId>; 4]>,
-    supporters: Vec<[Vec<PatternId>; 4]>,
+    supporter_bits: Vec<[Vec<PatternBit>; 4]>,
 }
 
 impl AdjacencyRules {
@@ -18,11 +24,11 @@ impl AdjacencyRules {
             .map(|_| { [Vec::new(), Vec::new(), Vec::new(), Vec::new()] })
             .collect();
 
-        let supporters = (0..pattern_count)
+        let supporter_bits = (0..pattern_count)
             .map(|_| { [Vec::new(), Vec::new(), Vec::new(), Vec::new()] })
             .collect();
 
-        Self { allowed, supporters }
+        Self { allowed, supporter_bits }
     }
 
     pub fn allow(
@@ -31,14 +37,18 @@ impl AdjacencyRules {
         direction: Direction,
         allowed_pattern_id: PatternId
     ) {
-        let dir_index = direction.to_index();
-        self.allowed[pattern_id][dir_index].push(allowed_pattern_id);
-        self.supporters[allowed_pattern_id][dir_index].push(pattern_id);
+        let supporter_word_index = pattern_id / 64;
+        let supporter_bit_index = pattern_id % 64;
+
+        self.supporter_bits[allowed_pattern_id][direction.to_index()].push(PatternBit {
+            word_index: supporter_word_index,
+            mask: 1u64 << supporter_bit_index,
+        });
+        self.allowed[pattern_id][direction.to_index()].push(allowed_pattern_id);
     }
 
-    pub fn get_supporters(&self, pattern_id: PatternId, direction: Direction) -> &[PatternId] {
-        let dir_index = direction.to_index();
-        &self.supporters[pattern_id][dir_index]
+    pub fn get_supporter_bits(&self, pattern_id: PatternId, direction: Direction) -> &[PatternBit] {
+        &self.supporter_bits[pattern_id][direction.to_index()]
     }
 
     pub fn get_allowed_patterns(

@@ -23,6 +23,10 @@ impl BitSet {
         }
     }
 
+    pub fn words(&self) -> &[u64] {
+        &self.words
+    }
+
     pub fn contains(&self, bit: usize) -> bool {
         assert!(bit < self.bit_count);
 

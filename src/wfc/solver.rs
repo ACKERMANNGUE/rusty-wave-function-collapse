@@ -220,18 +220,23 @@ impl WfcSolver {
                             continue;
                         };
 
-                        let supporters = rules.get_supporters(neighbor_pattern_id, direction);
+                        // bypass the expensive check since BitSet already has the information we need
+                        // pattern_id / 64
+                        // pattern_id % 64
+                        // 1u64 << bit_index
+                        // so the hot path just become possible_words[supporter.word_index] & supporter.mask != 0
+                        let supporters = rules.get_supporter_bits(neighbor_pattern_id, direction);
+                        let possible_words = current_cell.possible_pattern_words();
                         let mut supported = false;
 
-                        for &supporter_pattern_id in supporters {
+                        for supporter in supporters {
                             self.propagation_stats.support_checks += 1;
 
-                            if current_cell.is_pattern_possible(supporter_pattern_id) {
+                            if (possible_words[supporter.word_index] & supporter.mask) != 0 {
                                 supported = true;
                                 break;
                             }
                         }
-
                         supported
                     };
 

@@ -13,6 +13,10 @@ impl Cell {
         }
     }
 
+    pub fn possible_pattern_words(&self) -> &[u64] {
+        self.possible_patterns.words()
+    }
+
     pub fn is_pattern_possible(&self, pattern_id: PatternId) -> bool {
         self.possible_patterns.contains(pattern_id)
     }
