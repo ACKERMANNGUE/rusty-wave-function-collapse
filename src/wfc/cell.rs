@@ -65,19 +65,4 @@ impl Cell {
         self.possible_patterns.iter_ones().next()
     }
 
-    pub fn possible_pattern_words(&self) -> &[u64] {
-        self.possible_patterns.words()
-    }
-
-    pub fn intersect_with_mask(&mut self, mask: &[u64]) -> bool {
-        let removed_count = self.possible_patterns.intersect_with(mask);
-
-        if removed_count == 0 {
-            return false;
-        }
-
-        self.possible_count -= removed_count;
-
-        true
-    }
 }

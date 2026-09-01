@@ -23,15 +23,6 @@ impl BitSet {
         }
     }
 
-    pub fn empty(bit_count: usize) -> Self {
-        let word_count = bit_count.div_ceil(64);
-
-        Self {
-            words: vec![0; word_count],
-            bit_count,
-        }
-    }
-
     pub fn contains(&self, bit: usize) -> bool {
         assert!(bit < self.bit_count);
 
@@ -73,39 +64,6 @@ impl BitSet {
         }
 
         was_set
-    }
-
-    pub fn intersect_with(&mut self, other: &[u64]) -> usize {
-        assert_eq!(self.words.len(), other.len());
-
-        let mut removed_count = 0;
-
-        for (word, other_word) in self.words.iter_mut().zip(other.iter()) {
-            let old_word = *word;
-            let new_word = old_word & *other_word;
-
-            if new_word != old_word {
-                removed_count += (old_word ^ new_word).count_ones() as usize;
-                *word = new_word;
-            }
-        }
-
-        removed_count
-    }
-
-    pub fn words(&self) -> &[u64] {
-        &self.words
-    }
-
-    pub fn words_mut(&mut self) -> &mut [u64] {
-        &mut self.words
-    }
-
-    pub fn count_ones(&self) -> usize {
-        self.words
-            .iter()
-            .map(|word| word.count_ones() as usize)
-            .sum()
     }
 
     pub fn iter_ones(&self) -> impl Iterator<Item = usize> + '_ {

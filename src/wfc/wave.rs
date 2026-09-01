@@ -8,14 +8,7 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PatternRemovalResult {
     Unchanged,
-    Removed(usize), 
-    Contradiction,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CellConstraintResult {
-    Unchanged,
-    Changed(usize), //wtf is this usize? It represents the new possible count of patterns after applying the constraint
+    Removed(usize), //wtf is this usize? It represents the new possible count of patterns after applying the constraint
     Contradiction,
 }
 
@@ -275,51 +268,5 @@ impl Wave {
 
     pub fn get_contradiction_count(&self) -> usize {
         self.contradiction_count
-    }
-
-    pub fn intersect_cell_with_mask(
-        &mut self,
-        cell_index: usize,
-        mask: &[u64]
-    ) -> CellConstraintResult {
-        let (before_count, after_count) = {
-            let Some(cell) = self.cells.get_mut(cell_index) else {
-                return CellConstraintResult::Unchanged;
-            };
-
-            let before_count = cell.possible_count();
-
-            if before_count == 1 {
-                let pattern_id = cell
-                    .collapsed_pattern_id()
-                    .expect("Collapsed cell must contain one pattern");
-
-                let word_index = pattern_id / 64;
-                let bit_index = pattern_id % 64;
-                let is_supported = (mask[word_index] & (1u64 << bit_index)) != 0;
-
-                if is_supported {
-                    return CellConstraintResult::Unchanged;
-                }
-
-                let removed = cell.remove_pattern(pattern_id);
-                debug_assert!(removed);
-                (1, 0)
-            } else {
-                if !cell.intersect_with_mask(mask) {
-                    return CellConstraintResult::Unchanged;
-                }
-
-                (before_count, cell.possible_count())
-            }
-        };
-
-        self.update_cell_state_counts(before_count, after_count);
-
-        if after_count == 0 {
-            CellConstraintResult::Contradiction
-        } else {
-            CellConstraintResult::Changed(after_count)
-        }
     }
 }

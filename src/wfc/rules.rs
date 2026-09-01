@@ -60,11 +60,6 @@ impl AdjacencyRules {
         &self.allowed[pattern_id][dir_index]
     }
 
-    pub fn get_allowed_mask(&self, pattern_id: PatternId, direction: Direction) -> &[u64] {
-        let dir_index = direction.to_index();
-        &self.allowed_masks[pattern_id][dir_index]
-    }
-
     pub fn compute_rules(&mut self, patterns: &[Pattern]) {
         for pattern_a in patterns {
             for pattern_b in patterns {
