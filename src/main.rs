@@ -100,13 +100,11 @@ fn main() {
         println!("Propagation calls: {}", solver_timings.propagation_calls);
         let stats = solver.get_propagation_stats();
         println!("Propagation stats:");
-        println!("  Queue pops:                 {}", stats.queue_pops);
-        println!("  Neighbor checks:            {}", stats.neighbor_checks);
-        println!("  Collapsed current:          {}", stats.collapsed_current);
-        println!("  Collapsed neighbor:         {}", stats.collapsed_neighbor);
-        println!("  Changed neighbors:          {}", stats.changed_neighbors);
-        println!("  Patterns iterated:          {}", stats.patterns_iterated);
-        println!("  Allowed entries processed:  {}", stats.allowed_entries_processed);
+        println!("  Queue pops:         {}", stats.queue_pops);
+        println!("  Neighbor checks:    {}", stats.neighbor_checks);
+        println!("  Affected patterns:  {}", stats.affected_patterns);
+        println!("  Support checks:     {}", stats.support_checks);
+        println!("  Removed patterns:   {}", stats.removed_patterns);
 
         if !success {
             let attempt_duration = attempt_start.elapsed();

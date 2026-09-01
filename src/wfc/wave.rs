@@ -7,8 +7,8 @@ use crate::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PatternRemovalResult {
-    NotRemoved,
-    Removed,
+    Unchanged,
+    Removed(usize), 
     Contradiction,
 }
 
@@ -224,13 +224,13 @@ impl Wave {
     ) -> PatternRemovalResult {
         let (before_count, after_count) = {
             let Some(cell) = self.cells.get_mut(cell_index) else {
-                return PatternRemovalResult::NotRemoved;
+                return PatternRemovalResult::Unchanged;
             };
 
             let before_count = cell.possible_count();
 
             if !cell.remove_pattern(pattern_id) {
-                return PatternRemovalResult::NotRemoved;
+                return PatternRemovalResult::Unchanged;
             }
 
             let after_count = cell.possible_count();
@@ -243,7 +243,7 @@ impl Wave {
         if after_count == 0 {
             PatternRemovalResult::Contradiction
         } else {
-            PatternRemovalResult::Removed
+            PatternRemovalResult::Removed(after_count)
         }
     }
 
