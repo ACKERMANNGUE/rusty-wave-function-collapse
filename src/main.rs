@@ -6,16 +6,22 @@ use std::{ path::{ Path, PathBuf }, time::{ Duration, Instant } };
 
 use crate::{ image_manager::image_io, wfc::{ model::WfcModel, solver::WfcSolver } };
 
+use rand::{
+    SeedableRng,
+    rngs::StdRng,
+};
+
+
 const PATTERN_SIZE: u32 = 3;
 
-const OUTPUT_WAVE_WIDTH: usize = 64;
-const OUTPUT_WAVE_HEIGHT: usize = 64;
+const OUTPUT_WAVE_WIDTH: usize =    64*10;
+const OUTPUT_WAVE_HEIGHT: usize =   64*10;
 
 const MAX_ATTEMPTS: usize = 100000;
 
 fn build_input_path() -> PathBuf {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    Path::new(manifest_dir).join("assets/input.png")
+    Path::new(manifest_dir).join("assets/Dungeon.png")
 }
 
 fn build_output_path() -> PathBuf {
@@ -63,7 +69,7 @@ fn main() {
     println!("  Cells: {}", OUTPUT_WAVE_WIDTH * OUTPUT_WAVE_HEIGHT);
     println!("  Max attempts: {}", MAX_ATTEMPTS);
 
-    let mut rng = rand::rng();
+    let mut rng = StdRng::seed_from_u64(29);
 
     let generation_start = Instant::now();
 
@@ -100,11 +106,13 @@ fn main() {
         println!("Propagation calls: {}", solver_timings.propagation_calls);
         let stats = solver.get_propagation_stats();
         println!("Propagation stats:");
-        println!("  Queue pops:         {}", stats.queue_pops);
-        println!("  Neighbor checks:    {}", stats.neighbor_checks);
-        println!("  Affected patterns:  {}", stats.affected_patterns);
-        println!("  Support checks:     {}", stats.support_checks);
-        println!("  Removed patterns:   {}", stats.removed_patterns);
+        println!("  Queue pops:                  {}", stats.queue_pops);
+        println!("  Removals processed:          {}", stats.removals_processed);
+        println!("  Neighbor checks:             {}", stats.neighbor_checks);
+        println!("  Allowed entries processed:   {}", stats.allowed_entries_processed);
+        println!("  Unique affected patterns:    {}", stats.affected_patterns);
+        println!("  Support checks:              {}", stats.support_checks);
+        println!("  Removed patterns:            {}", stats.removed_patterns);
 
         if !success {
             let attempt_duration = attempt_start.elapsed();
