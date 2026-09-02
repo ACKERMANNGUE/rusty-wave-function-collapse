@@ -57,6 +57,23 @@ impl Cell {
         true
     }
 
+    pub fn restore_pattern(
+        &mut self,
+        pattern_id: PatternId,
+        weight: u32,
+        weight_log_weight: f64
+    ) -> bool {
+        if !self.possible_patterns.insert(pattern_id) {
+            return false;
+        }
+
+        self.possible_count += 1;
+        self.weight_sum += weight as u64;
+        self.weight_log_weight_sum += weight_log_weight;
+
+        true
+    }
+
     pub fn weight_sum(&self) -> u64 {
         self.weight_sum
     }
@@ -77,24 +94,6 @@ impl Cell {
 
     pub fn possible_count(&self) -> usize {
         self.possible_count
-    }
-
-    pub fn collapse_to(
-        &mut self,
-        pattern_id: PatternId,
-        selected_weight: u32,
-        selected_weight_log_weight: f64
-    ) -> bool {
-        if !self.is_pattern_possible(pattern_id) {
-            return false;
-        }
-
-        self.possible_patterns.keep_only(pattern_id);
-        self.possible_count = 1;
-        self.weight_sum = selected_weight as u64;
-        self.weight_log_weight_sum = selected_weight_log_weight;
-
-        true
     }
 
     pub fn collapsed_pattern_id(&self) -> Option<PatternId> {

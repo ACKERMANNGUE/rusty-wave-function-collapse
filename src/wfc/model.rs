@@ -55,10 +55,6 @@ impl WfcModel {
         &self.pattern_weights
     }
 
-    pub fn pattern_weight_log_weights(&self) -> &[f64] {
-        &self.pattern_weight_log_weights
-    }
-
     pub fn pattern_weight(&self, pattern_id: PatternId) -> u32 {
         self.pattern_weights[pattern_id]
     }

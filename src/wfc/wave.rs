@@ -6,7 +6,9 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PatternRemovalResult {
     Unchanged,
-    Removed(usize), //wtf is this usize? It represents the new possible count of patterns after applying the constraint
+    Removed {
+        possible_count: usize, // precise number of possible patterns remaining in the cell after removal
+    },
     Contradiction,
 }
 
@@ -212,16 +214,18 @@ impl Wave {
         if after_count == 0 {
             PatternRemovalResult::Contradiction
         } else {
-            PatternRemovalResult::Removed(after_count)
+            PatternRemovalResult::Removed {
+                possible_count: after_count,
+            }
         }
     }
 
-    pub fn collapse_cell_to(
+    pub fn restore_pattern_to_cell(
         &mut self,
         cell_index: usize,
         pattern_id: PatternId,
-        selected_weight: u32,
-        selected_weight_log_weight: f64
+        pattern_weight: u32,
+        pattern_weight_log_weight: f64
     ) -> bool {
         let (before_count, after_count) = {
             let Some(cell) = self.cells.get_mut(cell_index) else {
@@ -230,7 +234,7 @@ impl Wave {
 
             let before_count = cell.possible_count();
 
-            if !cell.collapse_to(pattern_id, selected_weight, selected_weight_log_weight) {
+            if !cell.restore_pattern(pattern_id, pattern_weight, pattern_weight_log_weight) {
                 return false;
             }
 

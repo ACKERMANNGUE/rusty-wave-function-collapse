@@ -50,7 +50,7 @@ impl BitSet {
         was_set
     }
 
-    pub fn keep_only(&mut self, bit: usize) -> bool {
+    pub fn insert(&mut self, bit: usize) -> bool {
         assert!(bit < self.bit_count);
 
         let word_index = bit / 64;
@@ -59,15 +59,9 @@ impl BitSet {
 
         let was_set = (self.words[word_index] & mask) != 0;
 
-        for word in &mut self.words {
-            *word = 0;
-        }
+        self.words[word_index] |= mask;
 
-        if was_set {
-            self.words[word_index] = mask;
-        }
-
-        was_set
+        !was_set
     }
 
     pub fn iter_ones(&self) -> impl Iterator<Item = usize> + '_ {
